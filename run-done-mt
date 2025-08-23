@@ -1,0 +1,4 @@
+#!/usr/bin/env fish
+cd (dirname (status --current-filename))
+source venv/bin/activate.fish
+python done-mt.py
