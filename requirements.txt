@@ -1,0 +1,10 @@
+python-telegram-bot==20.*
+openai
+anthropic
+groq
+langchain-core
+langchain-groq
+fastapi
+uvicorn
+python-dotenv
+requests
