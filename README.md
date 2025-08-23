@@ -15,9 +15,8 @@ AI-On-TelegramBot is a versatile open-source Telegram chatbot that supports vari
 [![Meta AI](https://img.shields.io/badge/Powered%20by-Meta%20AI-blueviolet.svg)](https://ai.meta.com/)
 [![LLM](https://img.shields.io/badge/Technology-LLM-lightgrey.svg)]()
 
-### Result Bot
-<video width="700" controls>
-  <source src="/root/result.webm" type="video/webm">
+## 🎬 Demo
+<video src="https://raw.githubusercontent.com/Gustyx-Power/Ai-On-TelegramBot/master/result.webm" width="600" controls>
 </video>
 
 ## License
