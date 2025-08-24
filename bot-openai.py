@@ -17,7 +17,7 @@ from telegram.ext import (
 )
 
 # --- konfigurasi OpenAI-compat Groq ---
-openai.api_key = os.getenv("GROQ_API_KEY", "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")
+openai.api_key = os.getenv("GROQ_API_KEY", "your-api_key")
 openai.base_url = "https://api.groq.com/openai/v1/"
 # --- Add your model here (Remove # on MODEL if you use)---
 # MODEL = "llama-3.3-70b-versatile"
