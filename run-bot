@@ -8,6 +8,6 @@ export ADMIN="@GustyxPower" # You Can Change
 export CUDA_VISIBLE_DEVICES=0
 export OLLAMA_GPU_LAYERS=99
 export OLLAMA_NUM_GPU=1
-python bot-openai.py # Default Groq & OpenAi
+python bot-groq.py # Default Groq & OpenAi
 ## python bot-ollama.py # For Use Ollama LLM
 ## python bot-gemini.py # For Use Gemini API

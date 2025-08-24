@@ -48,7 +48,7 @@ This means you are free to use, modify, and distribute the software, provided yo
 ### 2. Pick Your Bot
 | File            | Backend                            | Description                                                                         |
 |-----------------|------------------------------------|-------------------------------------------------------------------------------------|
-| `bot-openai.py` | Groq / OpenAI                      | 185 t/s, 128 k context, model selection (LLaMA, Kimi K2, GPT 4.1, Meta Ai).         |
+| `bot-groq.py`   | Groq / OpenAI                      | 185 t/s, 128 k context, model selection (LLaMA, Kimi K2, GPT 4.1, Meta Ai).         |
 | `bot-gemini.py` | Gemini-1.5-Flash or Gemini-1.5-Pro | 60 req/min free.                                                                    |
 | `bot-ollama.py` | Ollama local (Llama 3.2)           | Model Selection (LLaMA 3.2,LLaMA 3.1,Tinyllama or etc.), No internet, 100% privacy. |
 
