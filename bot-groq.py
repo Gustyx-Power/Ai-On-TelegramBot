@@ -989,6 +989,9 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         groups[str(chat.id)] = chat.title
         save_groups(groups)
     
+    # Reload disabled modes untuk pastikan data terbaru
+    load_disabled_modes()
+    
     # ======================
     # MODE INFORMASI (RAG) - Special handling
     # ======================
@@ -996,8 +999,8 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Cek apakah mode disabled
         if "informasi" in disabled_modes:
             await update.message.reply_text(
-                "🔴 Mode 'informasi' sedang NONAKTIF.\n"
-                "Silakan gunakan mode lain atau tunggu admin mengaktifkannya."
+                f"🔴 Mode 'informasi' telah DIMATIKAN oleh {ADMIN}.\n"
+                "Silakan gunakan mode lain."
             )
             return
         
@@ -1048,8 +1051,8 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Cek apakah mode disabled oleh admin
         if new_mode in disabled_modes:
             await update.message.reply_text(
-                f"🔴 Mode '{new_mode}' sedang NONAKTIF.\n"
-                "Silakan gunakan mode lain atau tunggu admin mengaktifkannya."
+                f"🔴 Mode '{new_mode}' telah DIMATIKAN oleh {ADMIN}.\n"
+                "Silakan gunakan mode lain."
             )
             return
         
@@ -1087,7 +1090,7 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Cek apakah current_mode disabled (untuk kasus pakai mode sebelumnya)
     if current_mode in disabled_modes:
         await update.message.reply_text(
-            f"🔴 Mode '{current_mode}' kamu sedang NONAKTIF.\n"
+            f"🔴 Mode '{current_mode}' telah DIMATIKAN oleh {ADMIN}.\n"
             "Gunakan /clear untuk reset dan pilih mode lain."
         )
         return
