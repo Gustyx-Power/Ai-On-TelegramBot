@@ -644,10 +644,8 @@ def web_search(query: str, max_results: int = 20) -> str:
 async def ask_groq_with_rag(query: str, user_id: int, username: str, message, bot) -> str:
     """
     RAG: Search web dulu, lalu kirim ke LLM dengan context.
-    Menggunakan streaming untuk typewriter effect.
+    Non-streaming untuk response yang lebih cepat.
     """
-    import asyncio
-    
     try:
         # Step 1: Update message - searching
         await bot.edit_message_text(
@@ -657,7 +655,7 @@ async def ask_groq_with_rag(query: str, user_id: int, username: str, message, bo
         )
         
         # Step 2: Web search
-        search_results = web_search(query, max_results=10)
+        search_results = web_search(query, max_results=20)
         
         # Step 3: Update message - processing
         await bot.edit_message_text(
@@ -680,39 +678,19 @@ async def ask_groq_with_rag(query: str, user_id: int, username: str, message, bo
         
         messages.append({"role": "user", "content": f"Pertanyaan: {query}"})
         
-        # Step 5: Streaming response - Pakai Kimi K2 (context 256K untuk RAG)
-        stream = openai.chat.completions.create(
+        # Step 5: Non-streaming response - Pakai Kimi K2 (context 256K untuk RAG)
+        response = openai.chat.completions.create(
             model=MODEL_INFORMASI,  # Kimi K2 dengan context window 256K
             messages=messages,
             max_tokens=2000,
             temperature=0.5,  # Lebih rendah untuk akurasi
-            top_p=0.9,
-            stream=True
+            top_p=0.9
         )
         
-        full_reply = ""
-        last_update_time = time.time()
-        update_interval = 0.8
+        full_reply = response.choices[0].message.content.strip()
+        final_text = strip_markdown(full_reply)
         
-        for chunk in stream:
-            if chunk.choices[0].delta.content:
-                full_reply += chunk.choices[0].delta.content
-                
-                current_time = time.time()
-                if current_time - last_update_time >= update_interval:
-                    try:
-                        display_text = strip_markdown(full_reply) + " ▌"
-                        await bot.edit_message_text(
-                            chat_id=message.chat.id,
-                            message_id=message.message_id,
-                            text=display_text[:4000]
-                        )
-                        last_update_time = current_time
-                    except Exception:
-                        pass
-        
-        # Final update
-        final_text = strip_markdown(full_reply.strip())
+        # Update with final response
         try:
             await bot.edit_message_text(
                 chat_id=message.chat.id,
@@ -725,7 +703,7 @@ async def ask_groq_with_rag(query: str, user_id: int, username: str, message, bo
         # Save to history
         if user_id:
             add_to_history(user_id, "user", query)
-            add_to_history(user_id, "assistant", full_reply.strip())
+            add_to_history(user_id, "assistant", full_reply)
         
         return final_text
     
