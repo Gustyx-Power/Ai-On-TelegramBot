@@ -50,6 +50,28 @@ if not TOKEN:
 DATA_FILE = "users.json"
 GROUPS_FILE = "groups.json"
 CONVERSATIONS_FILE = "conversations.json"
+DISABLED_MODES_FILE = "disabled_modes.json"
+
+# --- Global state untuk disabled modes ---
+disabled_modes = set()  # {'halus', 'kasar', 'informasi'}
+
+def load_disabled_modes():
+    """Load disabled modes from file."""
+    global disabled_modes
+    try:
+        with open(DISABLED_MODES_FILE, 'r') as f:
+            disabled_modes = set(json.load(f))
+    except (FileNotFoundError, json.JSONDecodeError):
+        disabled_modes = set()
+    return disabled_modes
+
+def save_disabled_modes():
+    """Save disabled modes to file."""
+    with open(DISABLED_MODES_FILE, 'w') as f:
+        json.dump(list(disabled_modes), f)
+
+# Load on startup
+load_disabled_modes()
 
 # --- Supabase Configuration ---
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://getbecxuuwalcdjnqoaa.supabase.co")
@@ -484,9 +506,10 @@ def format_response(reply: str) -> tuple[str, str]:
     return cleaned_text, None
 
 
-# --- Models untuk dual mode ---
+# --- Models untuk triple mode ---
 MODEL_HALUS = "openai/gpt-oss-120b"  # Santun, filtered
 MODEL_KASAR = "llama-3.3-70b-versatile"  # Brutal, less filtered
+MODEL_INFORMASI = "moonshotai/kimi-k2-instruct"  # RAG dengan context 256K
 
 # --- System prompts ---
 PROMPT_HALUS = (
@@ -608,9 +631,9 @@ async def ask_groq_with_rag(query: str, user_id: int, username: str, message, bo
         
         messages.append({"role": "user", "content": f"Pertanyaan: {query}"})
         
-        # Step 5: Streaming response - Pakai Llama 3.3 (lebih pintar untuk RAG)
+        # Step 5: Streaming response - Pakai Kimi K2 (context 256K untuk RAG)
         stream = openai.chat.completions.create(
-            model=MODEL_KASAR,  # Llama 3.3 lebih akurat untuk mengolah data
+            model=MODEL_INFORMASI,  # Kimi K2 dengan context window 256K
             messages=messages,
             max_tokens=2000,
             temperature=0.5,  # Lebih rendah untuk akurasi
@@ -957,6 +980,14 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # MODE INFORMASI (RAG) - Special handling
     # ======================
     if parts[1].lower() == "informasi":
+        # Cek apakah mode disabled
+        if "informasi" in disabled_modes:
+            await update.message.reply_text(
+                "🔴 Mode 'informasi' sedang NONAKTIF.\n"
+                "Silakan gunakan mode lain atau tunggu admin mengaktifkannya."
+            )
+            return
+        
         if len(parts) < 3:
             await update.message.reply_text(
                 "🔍 Mode Informasi - Cari info terbaru dari internet!\n\n"
@@ -1001,6 +1032,14 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Mode disebut secara eksplisit
         new_mode = parts[1].lower()
         
+        # Cek apakah mode disabled oleh admin
+        if new_mode in disabled_modes:
+            await update.message.reply_text(
+                f"🔴 Mode '{new_mode}' sedang NONAKTIF.\n"
+                "Silakan gunakan mode lain atau tunggu admin mengaktifkannya."
+            )
+            return
+        
         # Cek apakah mode sudah diset dan berbeda
         if current_mode and current_mode != new_mode:
             await update.message.reply_text(
@@ -1031,6 +1070,14 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         prompt = parts[1] if len(parts) == 2 else " ".join(parts[1:])
+    
+    # Cek apakah current_mode disabled (untuk kasus pakai mode sebelumnya)
+    if current_mode in disabled_modes:
+        await update.message.reply_text(
+            f"🔴 Mode '{current_mode}' kamu sedang NONAKTIF.\n"
+            "Gunakan /clear untuk reset dan pilih mode lain."
+        )
+        return
     
     await context.bot.send_chat_action(
         chat_id=update.effective_chat.id, action="typing"
@@ -1147,6 +1194,110 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("✅ Selesai menjawab.")
 
+# --- Admin commands untuk mode control ---
+async def off_mode_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin only: Disable a mode. Usage: /off halus|kasar|informasi"""
+    user = update.effective_user
+    username = f"@{user.username}" if user.username else user.first_name
+    
+    # Check admin
+    if username != ADMIN:
+        await update.message.reply_text("❌ Hanya admin yang bisa menggunakan command ini.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text(
+            "🔒 Cara pakai /off:\n\n"
+            "/off halus - Matikan mode halus\n"
+            "/off kasar - Matikan mode kasar\n"
+            "/off informasi - Matikan mode informasi\n\n"
+            f"Mode yang dimatikan: {list(disabled_modes) if disabled_modes else 'Tidak ada'}"
+        )
+        return
+    
+    mode = context.args[0].lower()
+    valid_modes = ["halus", "kasar", "informasi"]
+    
+    if mode not in valid_modes:
+        await update.message.reply_text(f"❌ Mode tidak valid. Pilih: {', '.join(valid_modes)}")
+        return
+    
+    if mode in disabled_modes:
+        await update.message.reply_text(f"⚠️ Mode '{mode}' sudah dimatikan sebelumnya.")
+        return
+    
+    disabled_modes.add(mode)
+    save_disabled_modes()
+    
+    await update.message.reply_text(
+        f"🔒 Mode '{mode}' berhasil DIMATIKAN!\n\n"
+        f"User tidak bisa menggunakan /anu {mode} sampai diaktifkan kembali.\n"
+        f"Gunakan /on {mode} untuk mengaktifkan."
+    )
+
+async def on_mode_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin only: Enable a mode. Usage: /on halus|kasar|informasi"""
+    user = update.effective_user
+    username = f"@{user.username}" if user.username else user.first_name
+    
+    # Check admin
+    if username != ADMIN:
+        await update.message.reply_text("❌ Hanya admin yang bisa menggunakan command ini.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text(
+            "🔓 Cara pakai /on:\n\n"
+            "/on halus - Aktifkan mode halus\n"
+            "/on kasar - Aktifkan mode kasar\n"
+            "/on informasi - Aktifkan mode informasi\n\n"
+            f"Mode yang dimatikan: {list(disabled_modes) if disabled_modes else 'Tidak ada'}"
+        )
+        return
+    
+    mode = context.args[0].lower()
+    valid_modes = ["halus", "kasar", "informasi"]
+    
+    if mode not in valid_modes:
+        await update.message.reply_text(f"❌ Mode tidak valid. Pilih: {', '.join(valid_modes)}")
+        return
+    
+    if mode not in disabled_modes:
+        await update.message.reply_text(f"⚠️ Mode '{mode}' sudah aktif.")
+        return
+    
+    disabled_modes.discard(mode)
+    save_disabled_modes()
+    
+    await update.message.reply_text(
+        f"🔓 Mode '{mode}' berhasil DIAKTIFKAN!\n\n"
+        f"User sekarang bisa menggunakan /anu {mode}."
+    )
+
+async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show bot status and mode availability."""
+    all_modes = ["halus", "kasar", "informasi"]
+    
+    status_lines = []
+    for mode in all_modes:
+        if mode in disabled_modes:
+            status_lines.append(f"🔴 {mode.capitalize()} - NONAKTIF")
+        else:
+            status_lines.append(f"🟢 {mode.capitalize()} - Aktif")
+    
+    model_info = (
+        f"\n\n📊 Model yang digunakan:\n"
+        f"• Halus: GPT OSS 120B\n"
+        f"• Kasar: Llama 3.3 70B\n"
+        f"• Informasi: Kimi K2 (256K context)"
+    )
+    
+    await update.message.reply_text(
+        "📊 Status Bot XMS AI:\n\n"
+        f"{chr(10).join(status_lines)}"
+        f"{model_info}"
+    )
+
 # --- startup notification ---
 async def post_init(application: Application) -> None:
     """Kirim notifikasi ke semua grup saat bot ready."""
@@ -1171,6 +1322,9 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("anu", anu_cmd))
     app.add_handler(CommandHandler("reload", reload_cmd))
     app.add_handler(CommandHandler("clear", clear_cmd))
+    app.add_handler(CommandHandler("off", off_mode_cmd))
+    app.add_handler(CommandHandler("on", on_mode_cmd))
+    app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
     
     # Tambahkan post_init untuk notifikasi startup
