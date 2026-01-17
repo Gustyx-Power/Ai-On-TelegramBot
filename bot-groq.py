@@ -679,6 +679,43 @@ async def premium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💰 Kirim Rp 15.000 ke DM @GustyxPower dengan bukti."
     )
 
+# --- command /ping ---
+async def ping_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Check bot latency and server info."""
+    import time
+    
+    # Measure latency
+    start_time = time.time()
+    msg = await update.message.reply_text("🏓 Pinging...")
+    end_time = time.time()
+    latency_ms = round((end_time - start_time) * 1000)
+    
+    # Get Koyeb region from environment (if available)
+    koyeb_region = os.getenv("KOYEB_REGION", None)
+    koyeb_dc = os.getenv("KOYEB_DC", None)
+    
+    # Map region codes to country names
+    region_map = {
+        "fra": "🇫🇷 Frankfurt, Jerman",
+        "was": "🇺🇸 Washington, USA",
+        "sin": "🇸🇬 Singapore",
+        "sfo": "🇺🇸 San Francisco, USA",
+    }
+    
+    if koyeb_region:
+        region_name = region_map.get(koyeb_region.lower(), f"🌍 {koyeb_region}")
+        server_info = f"☁️ Koyeb Server\n📍 Region: {region_name}"
+        if koyeb_dc:
+            server_info += f"\n🏢 Datacenter: {koyeb_dc}"
+    else:
+        server_info = "🏠 Local Server"
+    
+    await msg.edit_text(
+        f"🏓 PONG!\n\n"
+        f"{server_info}\n"
+        f"⚡ Latensi: {latency_ms} ms"
+    )
+
 # --- command /anu ---
 async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -895,6 +932,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("premium", premium_cmd))
+    app.add_handler(CommandHandler("ping", ping_cmd))
     app.add_handler(CommandHandler("anu", anu_cmd))
     app.add_handler(CommandHandler("reload", reload_cmd))
     app.add_handler(CommandHandler("clear", clear_cmd))
