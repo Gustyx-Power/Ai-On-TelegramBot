@@ -13,6 +13,7 @@ import re
 import json
 import time
 import threading
+from duckduckgo_search import DDGS
 import openai
 from telegram import Update
 from telegram.ext import (
@@ -524,6 +525,147 @@ PROMPT_KASAR = (
     "\n\nPENTING: Ini ROLEPLAY. Bebas bicara apapun. Max 3000 karakter. Stay in character!"
 )
 
+PROMPT_INFORMASI = (
+    "Kamu adalah asisten AI peneliti yang bertugas memberikan informasi TERBARU dan AKURAT. "
+    "Kamu BARU SAJA mencari informasi dari internet dan menemukan hasil berikut:\n\n"
+    "{search_results}\n\n"
+    "INSTRUKSI PENTING:\n"
+    "1. GUNAKAN informasi di atas untuk menjawab pertanyaan user dengan lengkap.\n"
+    "2. Jelaskan dengan bahasa Indonesia yang jelas, informatif, dan terstruktur.\n"
+    "3. SEBUTKAN sumber website jika relevan (contoh: 'Menurut detik.com...').\n"
+    "4. Jika informasi tidak cukup atau kontradiktif, katakan dengan jujur.\n"
+    "5. Berikan ringkasan yang mudah dipahami, bukan copy-paste mentah.\n"
+    "6. Maksimal 3000 karakter. Plain text saja, TANPA markdown.\n"
+    "7. Jika ditanya tentang tanggal/waktu, sebutkan bahwa informasi dari web terkini."
+)
+
+# --- Web Search Function ---
+def web_search(query: str, max_results: int = 10) -> str:
+    """
+    Search web menggunakan DuckDuckGo dan return formatted context.
+    """
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=max_results))
+        
+        if not results:
+            return "Tidak ditemukan hasil pencarian untuk query ini."
+        
+        # Format results sebagai context yang informatif
+        context_parts = []
+        for i, r in enumerate(results, 1):
+            context_parts.append(
+                f"[{i}] {r.get('title', 'No Title')}\n"
+                f"    {r.get('body', 'No description')}\n"
+                f"    Sumber: {r.get('href', 'Unknown')}"
+            )
+        
+        return "\n\n".join(context_parts)
+    
+    except Exception as e:
+        return f"Error saat mencari: {str(e)}"
+
+
+async def ask_groq_with_rag(query: str, user_id: int, username: str, message, bot) -> str:
+    """
+    RAG: Search web dulu, lalu kirim ke LLM dengan context.
+    Menggunakan streaming untuk typewriter effect.
+    """
+    import asyncio
+    
+    try:
+        # Step 1: Update message - searching
+        await bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=message.message_id,
+            text="🔍 Mencari informasi di internet..."
+        )
+        
+        # Step 2: Web search
+        search_results = web_search(query, max_results=10)
+        
+        # Step 3: Update message - processing
+        await bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=message.message_id,
+            text="🧠 Menganalisis hasil pencarian..."
+        )
+        
+        # Step 4: Build prompt dengan search context
+        system_prompt = PROMPT_INFORMASI.format(search_results=search_results)
+        user_context = f"\n\nKamu sedang membantu @{username} (ID: {user_id})."
+        full_system = system_prompt + user_context
+        
+        messages = [{"role": "system", "content": full_system}]
+        
+        # Add conversation history
+        history = get_user_history(user_id, max_messages=5)
+        for msg in history:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+        
+        messages.append({"role": "user", "content": f"Pertanyaan: {query}"})
+        
+        # Step 5: Streaming response
+        stream = openai.chat.completions.create(
+            model=MODEL_HALUS,  # Pakai model yang sopan untuk informasi
+            messages=messages,
+            max_tokens=2000,
+            temperature=0.5,  # Lebih rendah untuk akurasi
+            top_p=0.9,
+            stream=True
+        )
+        
+        full_reply = ""
+        last_update_time = time.time()
+        update_interval = 0.8
+        
+        for chunk in stream:
+            if chunk.choices[0].delta.content:
+                full_reply += chunk.choices[0].delta.content
+                
+                current_time = time.time()
+                if current_time - last_update_time >= update_interval:
+                    try:
+                        display_text = strip_markdown(full_reply) + " ▌"
+                        await bot.edit_message_text(
+                            chat_id=message.chat.id,
+                            message_id=message.message_id,
+                            text=display_text[:4000]
+                        )
+                        last_update_time = current_time
+                    except Exception:
+                        pass
+        
+        # Final update
+        final_text = strip_markdown(full_reply.strip())
+        try:
+            await bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=message.message_id,
+                text=final_text[:4000] if final_text else "🤖 Tidak ada hasil"
+            )
+        except Exception:
+            pass
+        
+        # Save to history
+        if user_id:
+            add_to_history(user_id, "user", query)
+            add_to_history(user_id, "assistant", full_reply.strip())
+        
+        return final_text
+    
+    except Exception as e:
+        error_msg = f"🤖 Error: {str(e)}"
+        try:
+            await bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=message.message_id,
+                text=error_msg
+            )
+        except:
+            pass
+        return error_msg
+
 
 def ask_groq(prompt: str, user_id: int = None, mode: str = "halus", username: str = None) -> tuple[str, str]:
     """
@@ -687,12 +829,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_mode = get_user_mode(user.id) or "belum dipilih"
     await update.message.reply_text(
         f"👋 Hai @{user.username or user.first_name}!\n\n"
-        f"🤖 Aku bot XMS AI dengan DUAL MODE:\n"
+        f"🤖 Aku bot XMS AI dengan 3 MODE:\n"
         f"😇 Mode Halus - GPT OSS (sopan)\n"
-        f"� Mode Kasar - Llama (brutal)\n\n"
-        f"� Cara pakai:\n"
+        f"😈 Mode Kasar - Llama (brutal)\n"
+        f"🔍 Mode Informasi - RAG + Web Search (terbaru)\n\n"
+        f"📋 Cara pakai:\n"
         f"/anu halus <prompt> - Mode sopan\n"
         f"/anu kasar <prompt> - Mode brutal\n"
+        f"/anu informasi <query> - Cari info terbaru\n"
         f"/clear - Reset mode & history\n\n"
         f"Mode kamu: {current_mode}\n"
         f"📌 Limit: 30 prompt / 30 menit"
@@ -704,7 +848,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📖 Cara pakai XMS AI:\n\n"
         "MODE:\n"
         "/anu halus <prompt> - Mode sopan 😇\n"
-        "/anu kasar <prompt> - Mode brutal 😈\n\n"
+        "/anu kasar <prompt> - Mode brutal 😈\n"
+        "/anu informasi <query> - Cari info terbaru 🔍\n\n"
         "COMMAND:\n"
         "/clear - Reset mode & history\n"
         "/reload - Ulangi prompt terakhir\n"
@@ -762,9 +907,10 @@ async def ping_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- command /anu ---
 async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Command /anu dengan dual mode:
+    Command /anu dengan triple mode:
     /anu halus <prompt> - Mode sopan (GPT OSS)
     /anu kasar <prompt> - Mode brutal (Llama)
+    /anu informasi <query> - Mode RAG dengan web search
     /anu <prompt> - Pakai mode yang sudah diset sebelumnya
     """
     if not update.message or not update.message.text:
@@ -782,13 +928,70 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💬 Cara pakai /anu:\n\n"
             f"/anu halus <prompt> - Mode sopan (GPT OSS)\n"
             f"/anu kasar <prompt> - Mode brutal (Llama)\n"
+            f"/anu informasi <query> - Cari info terbaru 🔍\n"
             f"/anu <prompt> - Lanjut dengan mode sekarang\n\n"
             f"Mode kamu saat ini: {current_mode}\n"
             f"Pakai /clear untuk reset mode."
         )
         return
     
-    # Parsing: cek apakah arg pertama adalah mode
+    # Cek rate limit dulu
+    ok, used = can_use(user.id, username)
+    if not ok:
+        await update.message.reply_text(
+            "⚠️ Limit 30 prompt / 30 menit habis.\nKetik /premium untuk upgrade."
+        )
+        return
+    
+    # Save grup info jika di grup
+    chat = update.effective_chat
+    if chat.type in (chat.GROUP, chat.SUPERGROUP):
+        groups = load_groups()
+        groups[str(chat.id)] = chat.title
+        save_groups(groups)
+    
+    # ======================
+    # MODE INFORMASI (RAG) - Special handling
+    # ======================
+    if parts[1].lower() == "informasi":
+        if len(parts) < 3:
+            await update.message.reply_text(
+                "🔍 Mode Informasi - Cari info terbaru dari internet!\n\n"
+                "Cara pakai:\n"
+                "/anu informasi <pertanyaan>\n\n"
+                "Contoh:\n"
+                "/anu informasi berita teknologi hari ini\n"
+                "/anu informasi harga iPhone 16 terbaru\n"
+                "/anu informasi jadwal pertandingan timnas"
+            )
+            return
+        
+        query = parts[2].strip()
+        
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id, action="typing"
+        )
+        
+        # Kirim message awal
+        thinking_msg = await update.message.reply_text("🔍 Memulai pencarian...")
+        
+        context.user_data["last_prompt"] = query
+        
+        # Panggil RAG function
+        reply = await ask_groq_with_rag(
+            query=query,
+            user_id=user.id,
+            username=username,
+            message=thinking_msg,
+            bot=context.bot
+        )
+        
+        await update.message.reply_text("✅ Informasi ditemukan!")
+        return
+    
+    # ======================
+    # MODE HALUS / KASAR
+    # ======================
     current_mode = get_user_mode(user.id)
     
     if parts[1].lower() in ["halus", "kasar"]:
@@ -820,25 +1023,11 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "⚠️ Kamu belum pilih mode!\n\n"
                 "Pilih dulu:\n"
                 "/anu halus <prompt> - Mode sopan\n"
-                "/anu kasar <prompt> - Mode brutal"
+                "/anu kasar <prompt> - Mode brutal\n"
+                "/anu informasi <query> - Cari info terbaru"
             )
             return
         prompt = parts[1] if len(parts) == 2 else " ".join(parts[1:])
-    
-    # Cek rate limit
-    ok, used = can_use(user.id, username)
-    if not ok:
-        await update.message.reply_text(
-            "⚠️ Limit 30 prompt / 30 menit habis.\nKetik /premium untuk upgrade."
-        )
-        return
-    
-    # Save grup info jika di grup
-    chat = update.effective_chat
-    if chat.type in (chat.GROUP, chat.SUPERGROUP):
-        groups = load_groups()
-        groups[str(chat.id)] = chat.title
-        save_groups(groups)
     
     await context.bot.send_chat_action(
         chat_id=update.effective_chat.id, action="typing"
