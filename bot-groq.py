@@ -783,12 +783,8 @@ def ask_groq(prompt: str, user_id: int = None, mode: str = "halus", username: st
 
 async def ask_groq_streaming(prompt: str, user_id: int, mode: str, username: str, message, bot) -> str:
     """
-    Query Groq API dengan streaming untuk typewriter effect.
-    OPTIMIZED: Update berdasarkan waktu, bukan karakter.
+    Query Groq API - Non-streaming untuk response lebih cepat.
     """
-    import asyncio
-    import time
-    
     try:
         # Pilih model dan prompt berdasarkan mode
         if mode == "kasar":
@@ -812,40 +808,19 @@ async def ask_groq_streaming(prompt: str, user_id: int, mode: str, username: str
         
         messages.append({"role": "user", "content": prompt})
         
-        # Streaming request
-        stream = openai.chat.completions.create(
+        # Non-streaming request
+        response = openai.chat.completions.create(
             model=model,
             messages=messages,
             max_tokens=1500,
             temperature=0.7,
-            top_p=0.9,
-            stream=True
+            top_p=0.9
         )
         
-        full_reply = ""
-        last_update_time = time.time()
-        update_interval = 0.8  # Update setiap 0.8 detik (bukan karakter)
+        full_reply = response.choices[0].message.content.strip()
+        final_text = strip_markdown(full_reply)
         
-        for chunk in stream:
-            if chunk.choices[0].delta.content:
-                full_reply += chunk.choices[0].delta.content
-                
-                # Update berdasarkan WAKTU, bukan karakter - lebih smooth
-                current_time = time.time()
-                if current_time - last_update_time >= update_interval:
-                    try:
-                        display_text = strip_markdown(full_reply) + " ▌"
-                        await bot.edit_message_text(
-                            chat_id=message.chat.id,
-                            message_id=message.message_id,
-                            text=display_text[:4000]
-                        )
-                        last_update_time = current_time
-                    except Exception:
-                        pass  # Skip rate limit errors
-        
-        # Final update tanpa cursor
-        final_text = strip_markdown(full_reply.strip())
+        # Update message dengan hasil
         try:
             await bot.edit_message_text(
                 chat_id=message.chat.id,
@@ -858,7 +833,7 @@ async def ask_groq_streaming(prompt: str, user_id: int, mode: str, username: str
         # Save to history
         if user_id:
             add_to_history(user_id, "user", prompt)
-            add_to_history(user_id, "assistant", full_reply.strip())
+            add_to_history(user_id, "assistant", full_reply)
         
         return final_text
 
