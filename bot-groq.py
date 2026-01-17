@@ -576,25 +576,61 @@ PROMPT_INFORMASI = (
 )
 
 # --- Web Search Function ---
-def web_search(query: str, max_results: int = 10) -> str:
+def web_search(query: str, max_results: int = 20) -> str:
     """
-    Search web menggunakan DuckDuckGo dan return formatted context.
+    Search web menggunakan DuckDuckGo dengan kombinasi news + text search.
+    Prioritaskan berita terbaru untuk hasil yang lebih fresh.
     """
+    all_results = []
+    
     try:
-        with DDGS(timeout=20) as ddgs:
-            results = list(ddgs.text(query, max_results=max_results, region='id-id'))
+        with DDGS(timeout=30) as ddgs:
+            # 1. News search dulu untuk berita terbaru (10 hasil)
+            try:
+                news_results = list(ddgs.news(query, max_results=10, region='id-id', timelimit='m'))
+                for r in news_results:
+                    all_results.append({
+                        'title': r.get('title', ''),
+                        'body': r.get('body', ''),
+                        'href': r.get('url', r.get('href', '')),
+                        'date': r.get('date', ''),
+                        'source': 'news'
+                    })
+            except Exception:
+                pass  # Fallback to text search if news fails
+            
+            # 2. Text search untuk hasil lebih lengkap (15 hasil)
+            try:
+                text_results = list(ddgs.text(query, max_results=15, region='id-id', timelimit='m'))
+                for r in text_results:
+                    # Skip duplikat berdasarkan URL
+                    href = r.get('href', '')
+                    if not any(x.get('href') == href for x in all_results):
+                        all_results.append({
+                            'title': r.get('title', ''),
+                            'body': r.get('body', ''),
+                            'href': href,
+                            'date': '',
+                            'source': 'web'
+                        })
+            except Exception:
+                pass
         
-        if not results:
+        if not all_results:
             return "Tidak ditemukan hasil pencarian untuk query ini. Coba dengan kata kunci yang berbeda."
         
         # Format results sebagai context yang informatif
         context_parts = []
-        for i, r in enumerate(results, 1):
+        for i, r in enumerate(all_results[:max_results], 1):
             title = r.get('title', 'No Title')
             body = r.get('body', 'No description')
             href = r.get('href', 'Unknown')
+            date = r.get('date', '')
+            source_type = "[BERITA]" if r.get('source') == 'news' else "[WEB]"
+            
+            date_info = f" ({date})" if date else ""
             context_parts.append(
-                f"[{i}] {title}\n"
+                f"{source_type} [{i}] {title}{date_info}\n"
                 f"    {body}\n"
                 f"    Sumber: {href}"
             )
