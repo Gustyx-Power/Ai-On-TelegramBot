@@ -700,6 +700,9 @@ async def ping_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "was": "🇺🇸 Washington, USA",
         "sin": "🇸🇬 Singapore",
         "sfo": "🇺🇸 San Francisco, USA",
+        "tyo": "🇯🇵 Tokyo, Jepang",
+        "par": "🇫🇷 Paris, Prancis",
+        "ams": "🇳🇱 Amsterdam, Belanda",
     }
     
     if koyeb_region:
