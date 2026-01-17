@@ -68,7 +68,7 @@ def load_groups():
     with lock:
         try:
             return json.load(open(GROUPS_FILE))
-        except FileNotFoundError:
+        except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
 def save_groups(groups):
