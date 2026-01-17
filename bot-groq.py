@@ -50,28 +50,9 @@ if not TOKEN:
 DATA_FILE = "users.json"
 GROUPS_FILE = "groups.json"
 CONVERSATIONS_FILE = "conversations.json"
-DISABLED_MODES_FILE = "disabled_modes.json"
 
 # --- Global state untuk disabled modes ---
 disabled_modes = set()  # {'halus', 'kasar', 'informasi'}
-
-def load_disabled_modes():
-    """Load disabled modes from file."""
-    global disabled_modes
-    try:
-        with open(DISABLED_MODES_FILE, 'r') as f:
-            disabled_modes = set(json.load(f))
-    except (FileNotFoundError, json.JSONDecodeError):
-        disabled_modes = set()
-    return disabled_modes
-
-def save_disabled_modes():
-    """Save disabled modes to file."""
-    with open(DISABLED_MODES_FILE, 'w') as f:
-        json.dump(list(disabled_modes), f)
-
-# Load on startup
-load_disabled_modes()
 
 # --- Supabase Configuration ---
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://getbecxuuwalcdjnqoaa.supabase.co")
@@ -88,6 +69,38 @@ except ImportError:
     print("⚠️ Supabase not installed, using local JSON fallback")
 except Exception as e:
     print(f"⚠️ Supabase connection failed: {e}")
+
+# --- Disabled modes functions (using Supabase) ---
+def load_disabled_modes():
+    """Load disabled modes from Supabase."""
+    global disabled_modes
+    if supabase:
+        try:
+            result = supabase.table("bot_settings").select("value").eq("key", "disabled_modes").execute()
+            if result.data and result.data[0].get("value"):
+                disabled_modes = set(result.data[0]["value"])
+                print(f"✅ Loaded disabled modes: {disabled_modes}")
+            else:
+                disabled_modes = set()
+        except Exception as e:
+            print(f"⚠️ Failed to load disabled modes: {e}")
+            disabled_modes = set()
+    return disabled_modes
+
+def save_disabled_modes():
+    """Save disabled modes to Supabase."""
+    if supabase:
+        try:
+            supabase.table("bot_settings").upsert({
+                "key": "disabled_modes",
+                "value": list(disabled_modes)
+            }).execute()
+            print(f"✅ Saved disabled modes: {disabled_modes}")
+        except Exception as e:
+            print(f"⚠️ Failed to save disabled modes: {e}")
+
+# Load disabled modes on startup
+load_disabled_modes()
 
 # --- persist user data ---
 lock = threading.Lock()
