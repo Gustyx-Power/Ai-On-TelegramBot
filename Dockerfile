@@ -1,5 +1,6 @@
 FROM python:3.11-slim
 
+# Force rebuild: v2
 WORKDIR /app
 
 # Install dependencies
