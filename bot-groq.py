@@ -545,25 +545,28 @@ def web_search(query: str, max_results: int = 10) -> str:
     Search web menggunakan DuckDuckGo dan return formatted context.
     """
     try:
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=max_results))
+        with DDGS(timeout=20) as ddgs:
+            results = list(ddgs.text(query, max_results=max_results, region='id-id'))
         
         if not results:
-            return "Tidak ditemukan hasil pencarian untuk query ini."
+            return "Tidak ditemukan hasil pencarian untuk query ini. Coba dengan kata kunci yang berbeda."
         
         # Format results sebagai context yang informatif
         context_parts = []
         for i, r in enumerate(results, 1):
+            title = r.get('title', 'No Title')
+            body = r.get('body', 'No description')
+            href = r.get('href', 'Unknown')
             context_parts.append(
-                f"[{i}] {r.get('title', 'No Title')}\n"
-                f"    {r.get('body', 'No description')}\n"
-                f"    Sumber: {r.get('href', 'Unknown')}"
+                f"[{i}] {title}\n"
+                f"    {body}\n"
+                f"    Sumber: {href}"
             )
         
         return "\n\n".join(context_parts)
     
     except Exception as e:
-        return f"Error saat mencari: {str(e)}"
+        return f"Error saat mencari: {str(e)}. Silakan coba lagi."
 
 
 async def ask_groq_with_rag(query: str, user_id: int, username: str, message, bot) -> str:
@@ -605,9 +608,9 @@ async def ask_groq_with_rag(query: str, user_id: int, username: str, message, bo
         
         messages.append({"role": "user", "content": f"Pertanyaan: {query}"})
         
-        # Step 5: Streaming response
+        # Step 5: Streaming response - Pakai Llama 3.3 (lebih pintar untuk RAG)
         stream = openai.chat.completions.create(
-            model=MODEL_HALUS,  # Pakai model yang sopan untuk informasi
+            model=MODEL_KASAR,  # Llama 3.3 lebih akurat untuk mengolah data
             messages=messages,
             max_tokens=2000,
             temperature=0.5,  # Lebih rendah untuk akurasi
