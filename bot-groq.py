@@ -1024,11 +1024,11 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # ======================
-    # MODE HALUS / KASAR
+    # MODE HALUS / KASAR / INFORMASI
     # ======================
     current_mode = get_user_mode(user.id)
     
-    if parts[1].lower() in ["halus", "kasar"]:
+    if parts[1].lower() in ["halus", "kasar", "informasi"]:
         # Mode disebut secara eksplisit
         new_mode = parts[1].lower()
         
@@ -1083,6 +1083,27 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id, action="typing"
     )
     
+    # ======================
+    # HANDLE MODE INFORMASI (RAG)
+    # ======================
+    if current_mode == "informasi":
+        thinking_msg = await update.message.reply_text("🔍 Memulai pencarian...")
+        context.user_data["last_prompt"] = prompt
+        
+        reply = await ask_groq_with_rag(
+            query=prompt,
+            user_id=user.id,
+            username=username,
+            message=thinking_msg,
+            bot=context.bot
+        )
+        
+        await update.message.reply_text("✅ Informasi ditemukan!")
+        return
+    
+    # ======================
+    # HANDLE MODE HALUS / KASAR
+    # ======================
     mode_emoji = "😇" if current_mode == "halus" else "😈"
     # Kirim message awal yang akan di-edit untuk typewriter effect
     thinking_msg = await update.message.reply_text(f"🤖 Mode {current_mode} {mode_emoji} sedang berpikir...")
