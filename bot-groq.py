@@ -909,7 +909,7 @@ async def ping_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Map region codes to country names
     region_map = {
-        "fra": "🇫🇷 Frankfurt, Jerman",
+        "fra": "🇩🇪 Frankfurt, Jerman",
         "was": "🇺🇸 Washington, USA",
         "sin": "🇸🇬 Singapore",
         "sfo": "🇺🇸 San Francisco, USA",
