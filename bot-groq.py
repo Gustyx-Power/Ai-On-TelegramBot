@@ -1025,7 +1025,7 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot=context.bot
         )
         
-        await update.message.reply_text("✅ Informasi ditemukan!")
+        # await update.message.reply_text("✅ Informasi ditemukan!")
         return
     
     # ======================
@@ -1103,7 +1103,7 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot=context.bot
         )
         
-        await update.message.reply_text("✅ Informasi ditemukan!")
+        # await update.message.reply_text("✅ Informasi ditemukan!")
         return
     
     # ======================
@@ -1125,7 +1125,7 @@ async def anu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot=context.bot
     )
     
-    await update.message.reply_text("✅ Selesai menjawab.")
+    # await update.message.reply_text("✅ Selesai menjawab.")
 
 # --- command /reload ---
 async def reload_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1218,7 +1218,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot=context.bot
     )
 
-    await update.message.reply_text("✅ Selesai menjawab.")
+    # await update.message.reply_text("✅ Selesai menjawab.")
 
 # --- Admin commands untuk mode control ---
 async def off_mode_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
